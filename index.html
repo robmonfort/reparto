@@ -74,6 +74,12 @@ label input{margin-top:2px}
 .leg.sel{background:#fffbeb;border-color:#f59e0b;box-shadow:0 0 0 1px #f59e0b}
 .leg.sel .num{background:#f59e0b;color:#16201e}
 .mk.s{background:#16201e} .mk.d{background:#9aa5a2} .mk.l{background:var(--bad)}
+#sug{position:fixed;z-index:1000;display:none;background:var(--card);border:1px solid var(--line);border-radius:8px;box-shadow:0 6px 20px #0003;max-height:260px;overflow:auto}
+.si{padding:9px 10px;border-top:1px solid var(--line);cursor:pointer;font-size:14px}
+.si:first-child{border-top:0}
+.si:hover{background:var(--bg)}
+.si span{display:block;font-size:12px;color:var(--mute)}
+.sn{padding:6px 10px;font-size:11px;color:var(--mute);border-top:1px solid var(--line)}
 .logrow{padding:5px 0;border-top:1px solid var(--line);font-size:14px}
 .logrow b{font-variant-numeric:tabular-nums;margin-right:6px}
 .hint{font-size:12px;color:var(--mute);margin:6px 2px}
@@ -135,7 +141,7 @@ details summary{cursor:pointer;font-weight:600;padding:4px 0}
     <button class="btn pri big" id="go">Calcular ruta óptima</button>
     <button class="btn sm" id="clear" style="margin-top:10px">Borrar todo</button>
     <button class="btn sm" id="install" style="margin-top:10px;display:none">Instalar app</button>
-    <p class="hint">Versión 9</p>
+    <p class="hint">Versión 10</p>
     <div id="msg"></div>
   </div>
 
@@ -248,7 +254,7 @@ try { geoCache = JSON.parse(localStorage.getItem('reparto-geo')) || {}; } catch 
 const ck = a => a.trim().toLowerCase().replace(/\s+/g, ' ');
 function remember(a, lat, lng) {
   if (!a || !a.trim()) return;
-  geoCache[ck(a)] = [lat, lng];
+  geoCache[ck(a)] = [lat, lng, a.trim()];
   try { localStorage.setItem('reparto-geo', JSON.stringify(geoCache)); } catch (e) {}
 }
 
@@ -589,6 +595,7 @@ const newStop = o => Object.assign({ id: uid(), name: '', address: '', from: '',
 $('#stops').addEventListener('change', e => {
   const el = e.target, s = S.stops.find(x => x.id === el.closest('.stop').dataset.id), f = el.dataset.f;
   if (!s || !f) return;
+  if (f === 'address' && s.address === el.value) return; // ya aplicada al elegir una sugerencia
   s[f] = el.value;
   if (f === 'address') { s.lat = s.lng = null; s.geo = null; renderStops(); drawMap(); }
   if (f !== 'name') { S.route = null; renderRoute(); }
@@ -601,7 +608,7 @@ $('#stops').addEventListener('click', e => {
   else placing = placing === id ? null : id;
   renderStops();
 });
-$('#startAddr').addEventListener('change', e => { S.start = { address: e.target.value, lat: null, lng: null }; S.route = null; save(); renderStops(); drawMap(); renderRoute(); });
+$('#startAddr').addEventListener('change', e => { if (e.target.value === S.start.address) return; S.start = { address: e.target.value, lat: null, lng: null }; S.route = null; save(); renderStops(); drawMap(); renderRoute(); });
 ['#startTime', '#traffic', '#round'].forEach(s => $(s).addEventListener('change', () => { readForm(); S.route = null; renderRoute(); drawMap(); }));
 $('#startPin').onclick = () => { placing = placing === 'start' ? null : 'start'; renderStops(); };
 $('#startGps').onclick = () => navigator.geolocation.getCurrentPosition(
@@ -786,6 +793,97 @@ function renderLog() {
 }
 
 new ResizeObserver(() => map.invalidateSize()).observe($('#map'));
+/* ---------- sugerencias al escribir una dirección ----------
+   Fuentes: direcciones ya usadas (guardadas en el dispositivo), Google Places si hay key, Photon (OSM) si no. */
+const sug = document.createElement('div'); sug.id = 'sug'; document.body.appendChild(sug);
+let sugFor = null, sugSeq = 0, sugTimer = 0, sugItems = [], placesOff = false;
+const isAddr = el => el && (el.id === 'startAddr' || (el.dataset && el.dataset.f === 'address'));
+const BOX = { low: { latitude: -35.0, longitude: -56.6 }, high: { latitude: -34.4, longitude: -55.5 } }; // Montevideo y alrededores
+function sugHide() { sug.style.display = 'none'; sugFor = null; }
+function sugShow(el, items, note) {
+  if (document.activeElement !== el || (!items.length && !note)) return sugHide();
+  sugFor = el; sugItems = items;
+  const r = el.getBoundingClientRect();
+  Object.assign(sug.style, { display: 'block', left: r.left + 'px', top: r.bottom + 2 + 'px', width: r.width + 'px' });
+  sug.innerHTML = items.map((x, i) => `<div class="si" data-i="${i}"><b>${esc(x.main)}</b>${x.sub ? `<span>${esc(x.sub)}</span>` : ''}</div>`).join('') + (note ? `<div class="sn">${esc(note)}</div>` : '');
+}
+async function sugGoogle(q, key) {
+  const r = await fetch('https://places.googleapis.com/v1/places:autocomplete', {
+    method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Goog-Api-Key': key },
+    body: JSON.stringify({ input: q, languageCode: 'es', includedRegionCodes: ['uy'], locationBias: { rectangle: BOX } })
+  });
+  const j = await r.json();
+  if (!r.ok) throw new Error((j.error && j.error.message) || 'error');
+  return (j.suggestions || []).filter(s => s.placePrediction).slice(0, 5).map(s => {
+    const p = s.placePrediction, f = p.structuredFormat || {}, main = (f.mainText && f.mainText.text) || p.text.text;
+    return { main, sub: (f.secondaryText && f.secondaryText.text) || '', text: main, placeId: p.placeId };
+  });
+}
+// Photon (datos OSM) conoce bien las calles pero mal los números de puerta. Por eso:
+// una calle solo completa el nombre (el número lo pone el usuario y se ubica al calcular);
+// un lugar con nombre o una puerta que coincide sí trae coordenadas.
+async function sugPhoton(q) {
+  const m = /^(.*?)(?:\s+(\d+\w*))?$/.exec(q), base = m[1], num = m[2] || '';
+  const r = await fetch('https://photon.komoot.io/api/?limit=10&lat=-34.89&lon=-56.16&bbox=-56.6,-35.0,-55.5,-34.4&q=' + encodeURIComponent(base));
+  const j = await r.json(), seen = new Set();
+  return (j.features || []).map(f => {
+    const p = f.properties, sub = [p.district || p.locality, p.city].filter(Boolean).join(', ');
+    if (p.type === 'street') return p.name && { main: p.name + (num ? ' ' + num : ''), sub: (sub ? sub + ' · ' : '') + 'calle', text: p.name + ' ' + num, partial: !num, mvd: p.city === 'Montevideo' };
+    if (num && !(p.housenumber || '').startsWith(num)) return null;
+    const st = [p.street, p.housenumber].filter(Boolean).join(' ');
+    const main = p.name && st && p.name !== p.street ? p.name + ', ' + st : (p.name || st);
+    return main && { main, sub, text: main, lat: f.geometry.coordinates[1], lng: f.geometry.coordinates[0], mvd: p.city === 'Montevideo' };
+  }).filter(Boolean).sort((a, b) => b.mvd - a.mvd)
+    .filter(x => { const k = x.lat == null ? x.main : x.main + x.sub; return !seen.has(k) && seen.add(k); }) // una calle, una fila
+    .slice(0, 5);
+}
+$('#v-edit').addEventListener('input', e => {
+  const el = e.target; if (!isAddr(el)) return;
+  clearTimeout(sugTimer);
+  const q = el.value.trim(), seq = ++sugSeq;
+  if (q.length < 3) return sugHide();
+  const plain = t => ck(t).normalize('NFD').replace(/[̀-ͯ]/g, ''); // "millan" encuentra "Millán"
+  const local = Object.entries(geoCache).filter(([k]) => plain(k).includes(plain(q)) && plain(k) !== plain(q)).slice(0, 3)
+    .map(([k, v]) => ({ main: v[2] || k, sub: 'Usada antes', text: v[2] || k, lat: v[0], lng: v[1] }));
+  sugShow(el, local);
+  sugTimer = setTimeout(async () => {
+    let remote = [], note = '';
+    try {
+      if (gkey() && !placesOff) { try { remote = await sugGoogle(q, gkey()); } catch (err) { placesOff = true; } }
+      if (!gkey() || placesOff) {
+        remote = await sugPhoton(q);
+        if (placesOff) note = 'Sugerencias básicas. Para las de Google, activar "Places API (New)" en la key.';
+      }
+    } catch (err) {}
+    if (seq === sugSeq) sugShow(el, [...local, ...remote].slice(0, 7), note);
+  }, 300);
+});
+sug.addEventListener('pointerdown', e => e.preventDefault()); // no sacar el foco del campo al tocar
+sug.addEventListener('click', async e => {
+  const it = e.target.closest('.si'); if (!it || !sugFor) return;
+  const x = sugItems[+it.dataset.i], el = sugFor, id = el.id === 'startAddr' ? 'start' : el.closest('.stop').dataset.id;
+  sugSeq++; sugHide(); el.value = x.text;
+  let lat = x.lat, lng = x.lng;
+  if (lat == null && x.placeId) { // sugerencia de Google: coordenadas exactas por id de lugar
+    try {
+      const r = await fetch('https://maps.googleapis.com/maps/api/geocode/json?place_id=' + encodeURIComponent(x.placeId) + '&key=' + encodeURIComponent(gkey()));
+      const j = await r.json();
+      if (j.status === 'OK') ({ lat, lng } = j.results[0].geometry.location);
+    } catch (err) {}
+  }
+  const p = id === 'start' ? S.start : S.stops.find(s => s.id === id);
+  if (!p) return;
+  if (x.partial) { // solo nombre de calle: seguir escribiendo el número
+    p.address = x.text; p.lat = p.lng = null; p.geo = null; S.route = null; save(); el.focus(); return;
+  }
+  p.address = x.text.trim(); p.lat = lat ?? null; p.lng = lng ?? null; p.geo = lat != null ? 'ok' : null;
+  if (lat != null) remember(x.text, lat, lng);
+  S.route = null; save(); fillForm(); renderStops(); renderRoute(); drawMap(lat != null);
+});
+$('#v-edit').addEventListener('focusout', () => setTimeout(() => { if (!isAddr(document.activeElement)) { sugSeq++; sugHide(); } }, 150));
+$('#v-edit').addEventListener('scroll', sugHide);
+document.addEventListener('keydown', e => { if (e.key === 'Escape') sugHide(); });
+
 /* ---------- app instalable (PWA) ---------- */
 if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').catch(() => {});
 let installEvt = null;
