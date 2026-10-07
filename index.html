@@ -5,6 +5,12 @@
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <meta name="theme-color" content="#0f766e">
 <title>Ruta de Reparto</title>
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icon-192.png">
+<link rel="apple-touch-icon" href="icon-192.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Reparto">
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 <style>
@@ -15,7 +21,7 @@
 }
 *{box-sizing:border-box}
 html,body{height:100%;margin:0}
-body{background:var(--bg);color:var(--ink);font:15px/1.4 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;display:flex;flex-direction:column}
+body{background:var(--bg);color:var(--ink);font:15px/1.4 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;display:flex;flex-direction:column;padding-bottom:env(safe-area-inset-bottom)}
 #map{height:38vh;min-height:220px;flex:none;z-index:0}
 #panel{flex:1;min-height:0;display:flex;flex-direction:column}
 .tabs{display:flex;background:var(--card);border-bottom:1px solid var(--line);flex:none}
@@ -128,7 +134,8 @@ details summary{cursor:pointer;font-weight:600;padding:4px 0}
 
     <button class="btn pri big" id="go">Calcular ruta óptima</button>
     <button class="btn sm" id="clear" style="margin-top:10px">Borrar todo</button>
-    <p class="hint">Versión 8</p>
+    <button class="btn sm" id="install" style="margin-top:10px;display:none">Instalar app</button>
+    <p class="hint">Versión 9</p>
     <div id="msg"></div>
   </div>
 
@@ -779,6 +786,13 @@ function renderLog() {
 }
 
 new ResizeObserver(() => map.invalidateSize()).observe($('#map'));
+/* ---------- app instalable (PWA) ---------- */
+if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').catch(() => {});
+let installEvt = null;
+window.addEventListener('beforeinstallprompt', e => { e.preventDefault(); installEvt = e; $('#install').style.display = ''; });
+window.addEventListener('appinstalled', () => { $('#install').style.display = 'none'; });
+$('#install').onclick = async () => { if (!installEvt) return; installEvt.prompt(); await installEvt.userChoice; installEvt = null; $('#install').style.display = 'none'; };
+
 // rutas guardadas por una versión anterior, sin duración de tramos: se reconstruye si nadie tocó los horarios; si no, se descarta
 if (S.route && S.route.schedule.some(x => x.leg == null)) {
   if (S.route.retimed != null) S.route = null;
