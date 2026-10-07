@@ -1,0 +1,796 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#0f766e">
+<title>Ruta de Reparto</title>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<style>
+:root{
+  --bg:#f4f5f4; --card:#fff; --ink:#16201e; --mute:#64706d; --line:#dfe4e2;
+  --brand:#0f766e; --brand-ink:#fff; --ok:#15803d; --warn:#b45309; --bad:#b91c1c;
+  --ok-bg:#dcfce7; --warn-bg:#fef3c7; --bad-bg:#fee2e2;
+}
+*{box-sizing:border-box}
+html,body{height:100%;margin:0}
+body{background:var(--bg);color:var(--ink);font:15px/1.4 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;display:flex;flex-direction:column}
+#map{height:38vh;min-height:220px;flex:none;z-index:0}
+#panel{flex:1;min-height:0;display:flex;flex-direction:column}
+.tabs{display:flex;background:var(--card);border-bottom:1px solid var(--line);flex:none}
+.tabs button{flex:1;padding:12px;border:0;background:none;font:inherit;font-weight:600;color:var(--mute);border-bottom:3px solid transparent}
+.tabs button.on{color:var(--brand);border-bottom-color:var(--brand)}
+.view{flex:1;overflow:auto;padding:12px;display:none;-webkit-overflow-scrolling:touch}
+.view.on{display:block}
+.card{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:10px;margin-bottom:10px}
+h2{font-size:13px;text-transform:uppercase;letter-spacing:.05em;color:var(--mute);margin:14px 2px 6px}
+h2:first-child{margin-top:0}
+input,textarea,button{font:inherit}
+input,textarea{width:100%;padding:9px 10px;border:1px solid var(--line);border-radius:8px;background:#fff;color:var(--ink)}
+input:focus,textarea:focus{outline:2px solid var(--brand);outline-offset:-1px}
+label{display:block;font-size:12px;color:var(--mute)}
+label input{margin-top:2px}
+.row{display:flex;gap:8px;align-items:end}
+.row>*{flex:1;min-width:0}
+.row>.fit{flex:none}
+.stop>*+*{margin-top:6px}
+.btn{padding:10px 14px;border-radius:8px;border:1px solid var(--line);background:var(--card);color:var(--ink);font-weight:600;cursor:pointer;text-decoration:none;display:inline-block;text-align:center}
+.btn.pri{background:var(--brand);color:var(--brand-ink);border-color:var(--brand)}
+.btn.big{width:100%;padding:14px;font-size:16px}
+.btn.sm{padding:7px 10px;font-size:13px}
+.btn:disabled{opacity:.5}
+.icon{flex:none!important;width:38px;height:38px;border:1px solid var(--line);border-radius:8px;background:var(--card);cursor:pointer}
+.icon.active{background:var(--brand);color:#fff;border-color:var(--brand)}
+.st{font-size:12px;color:var(--mute)}
+.st.ok{color:var(--ok)} .st.warn{color:var(--warn)} .st.bad{color:var(--bad)}
+#msg{position:sticky;bottom:0;margin-top:10px;padding:10px;border-radius:8px;background:var(--ink);color:#fff;font-size:14px;display:none}
+#msg.on{display:block}
+.sum{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;text-align:center}
+.sum b{display:block;font-size:20px}
+.sum span{font-size:12px;color:var(--mute)}
+.leg{display:flex;gap:10px}
+.leg.done{opacity:.45}
+.leg.next{border-color:var(--brand);box-shadow:0 0 0 1px var(--brand)}
+.num{flex:none;width:30px;height:30px;border-radius:50%;background:var(--brand);color:#fff;font-weight:700;display:grid;place-items:center}
+.leg .body{flex:1;min-width:0}
+.leg .nm{font-weight:700}
+.leg .ad{color:var(--mute);font-size:13px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.chips{display:flex;flex-wrap:wrap;gap:6px;margin:6px 0}
+.chip{font-size:12px;padding:2px 8px;border-radius:99px;background:var(--bg);font-variant-numeric:tabular-nums}
+.chip.ok{background:var(--ok-bg);color:var(--ok)} .chip.warn{background:var(--warn-bg);color:var(--warn)} .chip.bad{background:var(--bad-bg);color:var(--bad)}
+.acts{display:flex;gap:6px;flex-wrap:wrap;align-items:center}
+.acts label{display:flex;align-items:center;gap:6px;font-size:14px;color:var(--ink);margin-left:auto}
+.acts input{width:20px;height:20px;margin:0}
+.mk{width:26px;height:26px;border-radius:50%;background:var(--brand);color:#fff;font:700 12px system-ui;display:grid;place-items:center;border:2px solid #fff;box-shadow:0 1px 4px #0006}
+.mk.sel{background:#f59e0b;color:#16201e;transform:scale(1.5);box-shadow:0 0 0 4px #f59e0b55,0 1px 6px #0008}
+.leg{cursor:pointer}
+.leg.sel{background:#fffbeb;border-color:#f59e0b;box-shadow:0 0 0 1px #f59e0b}
+.leg.sel .num{background:#f59e0b;color:#16201e}
+.mk.s{background:#16201e} .mk.d{background:#9aa5a2} .mk.l{background:var(--bad)}
+.logrow{padding:5px 0;border-top:1px solid var(--line);font-size:14px}
+.logrow b{font-variant-numeric:tabular-nums;margin-right:6px}
+.hint{font-size:12px;color:var(--mute);margin:6px 2px}
+details summary{cursor:pointer;font-weight:600;padding:4px 0}
+@media(min-width:900px){
+  body{flex-direction:row-reverse}
+  #map{flex:1;height:auto}
+  #panel{flex:none;width:430px;border-right:1px solid var(--line)}
+}
+</style>
+</head>
+<body>
+<div id="map"></div>
+<div id="panel">
+  <div class="tabs">
+    <button data-tab="edit" class="on">Paradas</button>
+    <button data-tab="route">Ruta</button>
+  </div>
+
+  <div class="view on" id="v-edit">
+    <h2>Salida</h2>
+    <div class="card">
+      <div class="row">
+        <label>Punto de partida<input id="startAddr" placeholder="Dirección del depósito"></label>
+        <button class="icon fit" id="startGps" title="Usar mi ubicación">◎</button>
+        <button class="icon fit" id="startPin" title="Ubicar en mapa">📍</button>
+      </div>
+      <div class="st" id="startSt"></div>
+      <div class="row" style="margin-top:8px">
+        <label>Hora de salida<input type="time" id="startTime"></label>
+        <label id="trafficLbl">Factor tránsito<input type="number" id="traffic" min="1" max="3" step="0.1"></label>
+      </div>
+      <label style="display:flex;gap:8px;align-items:center;margin-top:8px;font-size:14px;color:var(--ink)">
+        <input type="checkbox" id="round" style="width:20px;height:20px"> Volver al punto de partida
+      </label>
+    </div>
+
+    <h2>Paradas <span id="count"></span></h2>
+    <div id="stops"></div>
+    <div class="row">
+      <button class="btn" id="add">+ Agregar parada</button>
+      <button class="btn" id="sample">Ejemplo</button>
+    </div>
+
+    <details class="card" style="margin-top:10px">
+      <summary>Pegar listado</summary>
+      <p class="hint">Una parada por línea: <code>Nombre; Dirección; 09:00-12:00; minutos</code>. También sirve pegado desde Excel (columnas separadas por tab). Horario y minutos opcionales.</p>
+      <textarea id="bulk" rows="5" placeholder="Farmacia Sur; Av. 18 de Julio 1360; 09:00-11:00; 5"></textarea>
+      <button class="btn sm" id="bulkAdd" style="margin-top:6px">Agregar al listado</button>
+    </details>
+
+    <details class="card">
+      <summary>Google Maps (opcional)</summary>
+      <p class="hint">Con una API key de Google (Geocoding API y Routes API activadas) las direcciones se ubican mejor y los horarios usan tránsito real. Sin key, la app usa datos libres y un factor de tránsito fijo. La key queda guardada solo en este dispositivo.</p>
+      <input id="gkey" placeholder="API key" autocomplete="off" spellcheck="false">
+      <div class="st ok" id="gkeySt"></div>
+    </details>
+
+    <button class="btn pri big" id="go">Calcular ruta óptima</button>
+    <button class="btn sm" id="clear" style="margin-top:10px">Borrar todo</button>
+    <p class="hint">Versión 8</p>
+    <div id="msg"></div>
+  </div>
+
+  <div class="view" id="v-route">
+    <div id="routeBox"><p class="hint">Todavía no hay ruta. Cargá paradas y tocá “Calcular ruta óptima”.</p></div>
+    <div id="logBox"></div>
+  </div>
+</div>
+
+<script>
+const $ = s => document.querySelector(s);
+const sleep = ms => new Promise(r => setTimeout(r, ms));
+const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const toMin = t => { const m = /^(\d{1,2}):(\d{2})$/.exec(t || ''); return m ? +m[1] * 60 + +m[2] : null; };
+const fmt = m => { m = Math.round(m); return String(Math.floor(m / 60) % 24).padStart(2, '0') + ':' + String(m % 60).padStart(2, '0'); };
+const dur = m => { m = Math.round(m); return m < 60 ? m + ' min' : Math.floor(m / 60) + ' h ' + String(m % 60).padStart(2, '0'); };
+
+/* ---------- estado ---------- */
+const LS = 'reparto-v1';
+const blank = () => ({ start: { address: '', lat: null, lng: null }, startTime: '08:00', traffic: 1.3, roundTrip: false, stops: [], route: null });
+let S = blank();
+try { const j = JSON.parse(localStorage.getItem(LS)); if (j && j.stops) S = Object.assign(blank(), j); } catch (e) {}
+const save = () => { try { localStorage.setItem(LS, JSON.stringify(S)); } catch (e) {} };
+const uid = () => Math.random().toString(36).slice(2, 9);
+let placing = null; // id de parada o 'start' esperando click en el mapa
+let sel = null;     // id de parada resaltada en lista y mapa
+
+/* ---------- mapa ---------- */
+const map = L.map('map').setView([-34.9011, -56.1645], 12);
+L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 19, attribution: '© OpenStreetMap' }).addTo(map);
+const layer = L.layerGroup().addTo(map);
+let line = null;
+
+map.on('click', e => {
+  if (!placing) return;
+  setPoint(placing, e.latlng.lat, e.latlng.lng, 'manual');
+  placing = null; renderStops(); say('');
+});
+
+function setPoint(id, lat, lng, how) {
+  const p = id === 'start' ? S.start : S.stops.find(s => s.id === id);
+  if (!p) return;
+  p.lat = lat; p.lng = lng; p.geo = how;
+  if (p.address !== 'Mi ubicación') remember(p.address, lat, lng); // pin corregido a mano vale para la próxima
+  S.route = null; save(); drawMap(); renderRoute();
+}
+
+function drawMap(fit) {
+  layer.clearLayers();
+  if (line) { line.remove(); line = null; }
+  const order = {}, late = {}, eta = {};
+  (S.route ? S.route.schedule : []).forEach((x, i) => { order[x.id] = i + 1; late[x.id] = x.late > 0; eta[x.id] = x.arrive; });
+  const pts = [];
+  const add = (p, id, label, cls, tip) => {
+    if (p.lat == null) return;
+    pts.push([p.lat, p.lng]);
+    const on = id === sel;
+    const m = L.marker([p.lat, p.lng], { draggable: true, zIndexOffset: on ? 1000 : 0, icon: L.divIcon({ className: '', html: `<div class="mk ${cls} ${on ? 'sel' : ''}">${label}</div>`, iconSize: [26, 26], iconAnchor: [13, 13] }) }).addTo(layer);
+    m.on('dragend', () => { const ll = m.getLatLng(); setPoint(id, ll.lat, ll.lng, 'manual'); renderStops(); });
+    if (id !== 'start') m.on('click', () => { if (!placing) select(id, true); });
+    if (on) m.bindTooltip(tip, { permanent: true, direction: 'top', offset: [0, -18] }).openTooltip();
+  };
+  add(S.start, 'start', '★', 's');
+  S.stops.forEach(s => add(s, s.id, order[s.id] || '', s.done ? 'd' : late[s.id] ? 'l' : '',
+    esc(s.name || s.address) + (eta[s.id] != null ? ' · llega ' + fmt(eta[s.id]) : '')));
+  if (S.route && S.route.geometry) line = L.polyline(S.route.geometry, { color: '#0f766e', weight: 5, opacity: .75 }).addTo(map);
+  map.invalidateSize();
+  if (fit && pts.length) map.fitBounds(pts, { padding: [30, 30], maxZoom: 15 });
+}
+
+// resalta una parada: desde la lista centra el mapa, desde el mapa lleva a la tarjeta
+function select(id, fromMap) {
+  sel = sel === id && !fromMap ? null : id;
+  renderRoute(); drawMap();
+  const s = S.stops.find(x => x.id === sel);
+  if (!s) return;
+  if (fromMap) {
+    if (!S.route) return;
+    showTab('route');
+    const el = document.querySelector(`.leg[data-id="${id}"]`);
+    if (el) el.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+  } else if (s.lat != null) map.flyTo([s.lat, s.lng], Math.max(map.getZoom(), 14), { duration: .5 });
+}
+
+/* ---------- geocodificación (Nominatim, 1 req/s) ---------- */
+async function nominatim(q) {
+  const url = 'https://nominatim.openstreetmap.org/search?format=jsonv2&limit=1&countrycodes=uy&viewbox=-56.45,-34.70,-55.95,-34.95&bounded=1&q=' + encodeURIComponent(q + ', Montevideo');
+  const r = await fetch(url, { headers: { 'Accept-Language': 'es' } });
+  const j = await r.json();
+  return j[0] ? { lat: +j[0].lat, lng: +j[0].lon } : null;
+}
+// Google (si hay API key): entiende esquinas y números de puerta
+const gkey = () => { try { return (localStorage.getItem('reparto-gkey') || '').trim(); } catch (e) { return ''; } };
+const inMvd = (lat, lng) => lat > -34.95 && lat < -34.70 && lng > -56.45 && lng < -55.95;
+async function googleGeocode(q, key) {
+  const addr = q.replace(/\s+(esq\.?|esquina)\s+/i, ' y ') + ', Montevideo, Uruguay';
+  const r = await fetch('https://maps.googleapis.com/maps/api/geocode/json?language=es&components=country:UY&bounds=-34.95,-56.45%7C-34.70,-55.95&address=' + encodeURIComponent(addr) + '&key=' + encodeURIComponent(key));
+  const j = await r.json();
+  if (j.status === 'ZERO_RESULTS') return null;
+  if (j.status !== 'OK') throw new Error('Google Geocoding: ' + (j.error_message || j.status));
+  const x = j.results[0], { lat, lng } = x.geometry.location;
+  if (!inMvd(lat, lng)) return null;
+  const exact = (x.types || []).some(t => ['street_address', 'premise', 'subpremise', 'intersection', 'establishment', 'point_of_interest'].includes(t));
+  return { lat, lng, geo: x.partial_match || !exact ? 'aprox' : 'ok' };
+}
+
+// direcciones ya resueltas (clientes que se repiten): no se vuelven a consultar
+let geoCache = {};
+try { geoCache = JSON.parse(localStorage.getItem('reparto-geo')) || {}; } catch (e) {}
+const ck = a => a.trim().toLowerCase().replace(/\s+/g, ' ');
+function remember(a, lat, lng) {
+  if (!a || !a.trim()) return;
+  geoCache[ck(a)] = [lat, lng];
+  try { localStorage.setItem('reparto-geo', JSON.stringify(geoCache)); } catch (e) {}
+}
+
+async function geocode(q) {
+  const m = /^\s*(-?\d+(?:\.\d+)?)\s*,\s*(-?\d+(?:\.\d+)?)\s*$/.exec(q);
+  if (m) return { lat: +m[1], lng: +m[2], geo: 'ok' };
+  const c = geoCache[ck(q)];
+  if (c) return { lat: c[0], lng: c[1], geo: 'ok', cached: true };
+  if (gkey()) return googleGeocode(q, gkey());
+  let g = await nominatim(q);
+  if (g) return { ...g, geo: 'ok' };
+  // sin número de puerta: cae al medio de la calle
+  const street = q.replace(/\b\d+\w*\b/g, '').replace(/\s+(esq\.?|esquina|y)\s+.*$/i, '').trim();
+  if (street && street !== q) { await sleep(1100); g = await nominatim(street); if (g) return { ...g, geo: 'aprox' }; }
+  return null;
+}
+async function geocodeAll() {
+  const todo = [S.start, ...S.stops.filter(s => !s.done)].filter(p => p.lat == null && p.address.trim());
+  for (let i = 0; i < todo.length; i++) {
+    say(`Buscando direcciones ${i + 1}/${todo.length}…`);
+    let slow = !gkey();
+    try {
+      const g = await geocode(todo[i].address);
+      if (g) {
+        if (g.cached) slow = false;
+        todo[i].lat = g.lat; todo[i].lng = g.lng; todo[i].geo = g.geo;
+        if (g.geo === 'ok' && !g.cached) remember(todo[i].address, g.lat, g.lng);
+      } else todo[i].geo = 'fail';
+    } catch (e) {
+      if (/^Google/.test(e.message)) throw e; // key inválida o API sin activar: que se vea
+      todo[i].geo = 'fail';
+    }
+    renderStops(); drawMap();
+    if (slow && i < todo.length - 1) await sleep(1100);
+  }
+  save();
+}
+
+/* ---------- tiempos de viaje (OSRM) ---------- */
+const hav = (a, b) => { const R = 6371, r = Math.PI / 180, dl = (b.lat - a.lat) * r, dn = (b.lng - a.lng) * r, x = Math.sin(dl / 2) ** 2 + Math.cos(a.lat * r) * Math.cos(b.lat * r) * Math.sin(dn / 2) ** 2; return 2 * R * Math.asin(Math.sqrt(x)); };
+const coords = pts => pts.map(p => p.lng.toFixed(6) + ',' + p.lat.toFixed(6)).join(';');
+async function matrix(pts) {
+  try {
+    const r = await fetch('https://router.project-osrm.org/table/v1/driving/' + coords(pts) + '?annotations=duration');
+    const j = await r.json();
+    if (j.code !== 'Ok') throw 0;
+    return { M: j.durations.map(row => row.map(v => (v == null ? 6e4 : v) / 60)), approx: false };
+  } catch (e) {
+    // sin servicio: línea recta x1.4 a 25 km/h
+    return { M: pts.map(a => pts.map(b => hav(a, b) * 1.4 / 25 * 60)), approx: true };
+  }
+}
+async function geometry(pts) {
+  try {
+    const r = await fetch('https://router.project-osrm.org/route/v1/driving/' + coords(pts) + '?overview=full&geometries=geojson');
+    const j = await r.json();
+    if (j.code !== 'Ok') throw 0;
+    return { line: j.routes[0].geometry.coordinates.map(c => [c[1], c[0]]), km: j.routes[0].distance / 1000 };
+  } catch (e) { return { line: pts.map(p => [p.lat, p.lng]), km: null }; }
+}
+
+/* ---------- tránsito real (Google Routes), tramo por tramo ---------- */
+function decodePoly(s) {
+  const out = []; let i = 0, lat = 0, lng = 0;
+  while (i < s.length) {
+    for (const k of [0, 1]) {
+      let b, sh = 0, r = 0;
+      do { b = s.charCodeAt(i++) - 63; r |= (b & 31) << sh; sh += 5; } while (b >= 32);
+      const d = r & 1 ? ~(r >> 1) : r >> 1;
+      if (k) lng += d; else lat += d;
+    }
+    out.push([lat / 1e5, lng / 1e5]);
+  }
+  return out;
+}
+async function gRoute(a, b, when, key) {
+  const ll = p => ({ location: { latLng: { latitude: p.lat, longitude: p.lng } } });
+  const body = { origin: ll(a), destination: ll(b), travelMode: 'DRIVE', routingPreference: 'TRAFFIC_AWARE', languageCode: 'es' };
+  if (when > Date.now() + 60000) body.departureTime = new Date(when).toISOString(); // pasado o ya: tránsito actual
+  const r = await fetch('https://routes.googleapis.com/directions/v2:computeRoutes', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'X-Goog-Api-Key': key, 'X-Goog-FieldMask': 'routes.duration,routes.distanceMeters,routes.polyline.encodedPolyline' },
+    body: JSON.stringify(body)
+  });
+  const j = await r.json();
+  if (!r.ok || !j.routes || !j.routes[0]) throw new Error('Google Routes: ' + ((j.error && j.error.message) || 'sin ruta'));
+  const x = j.routes[0];
+  return { min: parseFloat(x.duration) / 60, km: (x.distanceMeters || 0) / 1000, line: x.polyline ? decodePoly(x.polyline.encodedPolyline) : [[a.lat, a.lng], [b.lat, b.lng]] };
+}
+// Recorre el orden pidiendo cada tramo con su hora de salida real (incluye esperas y tiempo en cada parada).
+// Devuelve P con esos tiempos, la geometría y la relación Google/OSRM para calibrar el factor.
+async function googleLegs(order, pts, P, raw, key, day0) {
+  const M = P.M.map(r => r.slice()), line = [];
+  let t = P.t0, prev = 0, km = 0, g = 0, o = 0;
+  for (const j of P.round ? [...order, 0] : order) {
+    const r = await gRoute(pts[prev], pts[j], day0 + t * 60000, key);
+    M[prev][j] = r.min; g += r.min; o += raw[prev][j]; km += r.km; line.push(...r.line);
+    t += r.min;
+    if (j) { if (t < P.a[j]) t = P.a[j]; t += P.s[j]; }
+    prev = j;
+  }
+  return { P: { ...P, M }, km, line, ratio: o > 0 ? g / o : 1 };
+}
+
+// Ubicación actual, solo si es creíble. Una PC sin GPS se ubica por IP y puede caer en otro país.
+async function getHere(near) {
+  const pos = await new Promise((ok, no) => navigator.geolocation.getCurrentPosition(ok, no, { enableHighAccuracy: true, maximumAge: 60000, timeout: 10000 }));
+  const here = { lat: pos.coords.latitude, lng: pos.coords.longitude }, acc = pos.coords.accuracy;
+  const far = near ? hav(here, near) : 0;
+  if (acc > 2000 || far > 150) {
+    const e = new Error(far > 150
+      ? `El dispositivo informa una ubicación a ${Math.round(far)} km de las paradas. No es confiable (PC sin GPS). Usar un celular con GPS.`
+      : `Ubicación poco precisa (±${(acc / 1000).toFixed(1)} km). Usar un celular con GPS o esperar mejor señal.`);
+    e.loc = true; throw e;
+  }
+  return here;
+}
+
+/* ---------- solver: TSP con ventanas horarias ----------
+   P = {M, t0, a[], b[], s[], round}; nodo 0 = salida, 1..n = paradas.
+   Llegar antes de a → espera. Empezar después de b → tarde (penalizado). */
+function walk(order, P, out) {
+  let t = P.t0, prev = 0, late = 0, nLate = 0, drive = 0;
+  for (const j of order) {
+    const d = P.M[prev][j]; drive += d; t += d;
+    const arrive = t;
+    if (t < P.a[j]) t = P.a[j];
+    const l = Math.max(0, t - P.b[j]);
+    if (l > 0.5) { late += l; nLate++; }
+    if (out) out.push({ node: j, arrive, begin: t, wait: t - arrive, late: l > 0.5 ? l : 0, depart: t + P.s[j] });
+    t += P.s[j]; prev = j;
+  }
+  if (P.round && order.length) { t += P.M[prev][0]; drive += P.M[prev][0]; }
+  // atraso manda; después hora de fin + manejo (a igual hora de fin, gana la que menos kilómetros hace)
+  return { cost: nLate * 1e5 + late * 1e3 + t + drive, end: t, drive, late, nLate };
+}
+const cost = (o, P) => walk(o, P).cost;
+
+// exacto: prueba todos los órdenes (hasta 9 paradas)
+function solveBrute(P, n) {
+  const o = Array.from({ length: n }, (_, i) => i + 1);
+  let best = null, bc = Infinity;
+  (function rec(k) {
+    if (k === n) { const c = cost(o, P); if (c < bc) { bc = c; best = o.slice(); } return; }
+    for (let i = k; i < n; i++) { [o[k], o[i]] = [o[i], o[k]]; rec(k + 1); [o[k], o[i]] = [o[i], o[k]]; }
+  })(0);
+  return best;
+}
+
+// orden factible con fin más temprano (programación dinámica), ventanas estrictas; semilla para la heurística
+function solveExact(P, n) {
+  const N = 1 << n, dp = new Float64Array(N * n).fill(Infinity), par = new Int8Array(N * n).fill(-1);
+  for (let j = 0; j < n; j++) {
+    const t = Math.max(P.t0 + P.M[0][j + 1], P.a[j + 1]);
+    if (t <= P.b[j + 1] + 0.5) dp[(1 << j) * n + j] = t + P.s[j + 1];
+  }
+  for (let m = 1; m < N; m++) for (let l = 0; l < n; l++) {
+    const cur = dp[m * n + l];
+    if (cur === Infinity) continue;
+    for (let j = 0; j < n; j++) {
+      if (m >> j & 1) continue;
+      const t = Math.max(cur + P.M[l + 1][j + 1], P.a[j + 1]);
+      if (t > P.b[j + 1] + 0.5) continue;
+      const k = (m | 1 << j) * n + j;
+      if (t + P.s[j + 1] < dp[k]) { dp[k] = t + P.s[j + 1]; par[k] = l; }
+    }
+  }
+  let best = Infinity, last = -1;
+  for (let l = 0; l < n; l++) { const v = dp[(N - 1) * n + l] + (P.round ? P.M[l + 1][0] : 0); if (v < best) { best = v; last = l; } }
+  if (last < 0) return null;
+  const order = [];
+  for (let m = N - 1, l = last; l >= 0;) { order.unshift(l + 1); const p = par[m * n + l]; m ^= 1 << l; l = p; }
+  return order;
+}
+
+function localSearch(o, P) {
+  let c = cost(o, P), improved = true;
+  const n = o.length;
+  while (improved) {
+    improved = false;
+    for (let i = 0; i < n; i++) for (let j = 0; j < n; j++) {
+      if (i === j) continue;
+      let t = o.slice(); const [x] = t.splice(i, 1); t.splice(j, 0, x);        // mover
+      let tc = cost(t, P);
+      if (tc >= c - 1e-9 && i < j) {
+        t = o.slice(); t[i] = o[j]; t[j] = o[i]; tc = cost(t, P);              // intercambiar
+        if (tc >= c - 1e-9) { t = o.slice(0, i).concat(o.slice(i, j + 1).reverse(), o.slice(j + 1)); tc = cost(t, P); } // invertir tramo
+      }
+      if (tc < c - 1e-9) { o = t; c = tc; improved = true; }
+    }
+  }
+  return o;
+}
+function solveHeur(P, n, ms, seed) {
+  const ids = Array.from({ length: n }, (_, i) => i + 1);
+  const byDeadline = ids.slice().sort((x, y) => P.b[x] - P.b[y] || P.a[x] - P.a[y]);
+  const nn = []; { const left = new Set(ids); let cur = 0; while (left.size) { let b = -1; for (const j of left) if (b < 0 || P.M[cur][j] < P.M[cur][b]) b = j; nn.push(b); left.delete(b); cur = b; } }
+  const seeds = [byDeadline, nn]; if (seed) seeds.unshift(seed);
+  let best = null, bc = Infinity;
+  const end = performance.now() + ms;
+  for (let k = 0; k < seeds.length || performance.now() < end; k++) {
+    let o;
+    if (k < seeds.length) o = seeds[k].slice();
+    else { o = best.slice(); for (let r = 0; r < 3 && n > 1; r++) { const i = Math.random() * n | 0, j = Math.random() * n | 0; [o[i], o[j]] = [o[j], o[i]]; } }
+    o = localSearch(o, P);
+    const c = cost(o, P);
+    if (c < bc) { bc = c; best = o; }
+    if (n < 3) break;
+  }
+  return best;
+}
+function solve(P, n) {
+  if (n === 0) return [];
+  if (n <= 9) return solveBrute(P, n);
+  return solveHeur(P, n, 2000, n <= 15 ? solveExact(P, n) : null);
+}
+
+/* ---------- optimizar ---------- */
+async function optimize(fromHere) {
+  const btn = $('#go'); btn.disabled = true;
+  try {
+    readForm();
+    const stops = S.stops.filter(s => !s.done && (s.address.trim() || s.lat != null));
+    if (!stops.length) return say('No hay paradas pendientes.');
+    let origin = S.start, t0 = toMin(S.startTime) ?? 480;
+    if (fromHere) {
+      say('Obteniendo ubicación…');
+      origin = await getHere(stops.find(s => s.lat != null) || (S.start.lat != null ? S.start : null));
+      const d = new Date(); t0 = d.getHours() * 60 + d.getMinutes();
+    } else if (!S.start.address.trim() && S.start.lat == null) return say('Falta el punto de partida.');
+    await geocodeAll();
+    const missing = [origin, ...stops].filter(p => p.lat == null);
+    if (missing.length) { showTab('edit'); return say(`${missing.length} dirección(es) sin ubicar. Corregilas o tocá 📍 y marcá el punto en el mapa.`); }
+
+    say('Calculando tiempos de viaje…');
+    const pts = [origin, ...stops];
+    const { M, approx } = await matrix(pts);
+    const f = +S.traffic || 1;
+    const P = {
+      M: M.map(r => r.map(v => v * f)), t0, round: S.roundTrip,
+      a: [0, ...stops.map(s => toMin(s.from) ?? 0)],
+      b: [0, ...stops.map(s => toMin(s.to) ?? 1e9)],
+      s: [0, ...stops.map(s => Math.max(0, +s.service || 0))]
+    };
+    say('Optimizando orden…'); await sleep(30);
+    let order = solve(P, stops.length), live = null, warn = '', g;
+    const key = gkey();
+    if (key) {
+      try {
+        say('Consultando tránsito…');
+        const d = new Date(); d.setHours(0, 0, 0, 0);
+        // salida de hace más de 2 h: se asume que la ruta es para mañana
+        const day0 = +d + (!fromHere && t0 < (Date.now() - d) / 60000 - 120 ? 864e5 : 0);
+        live = await googleLegs(order, pts, P, M, key, day0);
+        const f2 = Math.min(3, Math.max(1, live.ratio));
+        if (walk(order, live.P).nLate || Math.abs(f2 - f) / f > 0.1) {
+          // tránsito real distinto al supuesto: reoptimiza una vez con el factor medido
+          const Pf = { ...P, M: M.map(r => r.map(v => v * f2)) };
+          const o2 = solve(Pf, stops.length);
+          if (o2.join() !== order.join()) {
+            const l2 = await googleLegs(o2, pts, Pf, M, key, day0);
+            if (walk(o2, l2.P).cost < walk(order, live.P).cost) { order = o2; live = l2; }
+          }
+        }
+        S.traffic = Math.round(f2 * 100) / 100; fillForm();
+      } catch (e) { live = null; warn = e.message || String(e); }
+    }
+    const sched = [], tot = walk(order, live ? live.P : P, sched);
+    if (live) g = { line: live.line, km: live.km };
+    else { const seq = [origin, ...order.map(j => pts[j])]; if (S.roundTrip) seq.push(origin); g = await geometry(seq); }
+    S.route = {
+      live: !!live, warn,
+      t0, end: tot.end, drive: tot.drive, nLate: tot.nLate, km: g.km, approx: approx && !live, round: S.roundTrip,
+      origin: { lat: origin.lat, lng: origin.lng }, geometry: g.line,
+      // leg = minutos de viaje del tramo que llega a la parada; se guarda aparte porque arrive/depart cambian al salir
+      back: sched.length ? tot.end - sched[sched.length - 1].depart : 0,
+      schedule: sched.map((x, i) => ({ id: stops[x.node - 1].id, leg: x.arrive - (i ? sched[i - 1].depart : t0), arrive: x.arrive, begin: x.begin, wait: x.wait, late: x.late, depart: x.depart }))
+    };
+    save(); say(''); renderRoute(); drawMap(true); showTab('route');
+  } catch (e) {
+    const m = e && e.loc ? e.message : e && e.code ? 'No se pudo obtener la ubicación (permiso o GPS).' : 'Error: ' + (e.message || e);
+    say(m);
+    if (fromHere) alert(m); // el botón está en la pestaña Ruta, donde el mensaje de abajo no se ve
+  } finally { btn.disabled = false; }
+}
+
+/* ---------- UI: edición ---------- */
+function say(t) { const m = $('#msg'); m.textContent = t; m.classList.toggle('on', !!t); }
+function showTab(t) {
+  document.querySelectorAll('.tabs button').forEach(b => b.classList.toggle('on', b.dataset.tab === t));
+  $('#v-edit').classList.toggle('on', t === 'edit'); $('#v-route').classList.toggle('on', t === 'route');
+}
+function status(p) {
+  if (placing && (placing === p.id || (placing === 'start' && p === S.start))) return ['warn', 'Tocá el mapa para marcar el punto'];
+  if (p.lat != null) return p.geo === 'aprox' ? ['warn', '≈ Ubicación aproximada (solo calle). Arrastrá el pin para ajustar'] : ['ok', '✓ Ubicada'];
+  if (p.geo === 'fail') return ['bad', '✕ Dirección no encontrada'];
+  return ['', ''];
+}
+function renderStops() {
+  $('#count').textContent = S.stops.length ? '(' + S.stops.length + ')' : '';
+  const [c0, t0] = status(S.start); $('#startSt').className = 'st ' + c0; $('#startSt').textContent = t0;
+  $('#startPin').classList.toggle('active', placing === 'start');
+  $('#stops').innerHTML = S.stops.map(s => {
+    const [c, t] = status(s);
+    return `<div class="card stop" data-id="${s.id}">
+      <div class="row"><input data-f="name" placeholder="Nombre / cliente" value="${esc(s.name)}">
+        <button class="icon fit ${placing === s.id ? 'active' : ''}" data-act="pin" title="Ubicar en mapa">📍</button>
+        <button class="icon fit" data-act="del" title="Borrar">✕</button></div>
+      <input data-f="address" placeholder="Dirección (calle y número)" value="${esc(s.address)}">
+      <div class="row">
+        <label>Desde<input type="time" data-f="from" value="${esc(s.from)}"></label>
+        <label>Hasta<input type="time" data-f="to" value="${esc(s.to)}"></label>
+        <label>Min. en lugar<input type="number" min="0" data-f="service" value="${esc(s.service)}"></label>
+      </div>
+      <div class="st ${c}">${esc(t)}</div></div>`;
+  }).join('');
+}
+function readForm() {
+  S.startTime = $('#startTime').value || '08:00';
+  S.traffic = Math.min(3, Math.max(1, +$('#traffic').value || 1));
+  S.roundTrip = $('#round').checked;
+  save();
+}
+function fillForm() {
+  $('#startAddr').value = S.start.address; $('#startTime').value = S.startTime;
+  $('#traffic').value = S.traffic; $('#round').checked = S.roundTrip;
+  const k = gkey();
+  $('#gkey').value = k;
+  $('#trafficLbl').style.display = k ? 'none' : ''; // con Google el factor se mide solo
+  $('#gkeySt').textContent = k ? '✓ Google activo: direcciones y tránsito real.' : '';
+}
+$('#gkey').addEventListener('change', e => {
+  try { localStorage.setItem('reparto-gkey', e.target.value.trim()); } catch (x) {}
+  S.route = null; save(); fillForm(); renderRoute(); drawMap();
+});
+const newStop = o => Object.assign({ id: uid(), name: '', address: '', from: '', to: '', service: 5, lat: null, lng: null, done: false }, o);
+
+$('#stops').addEventListener('change', e => {
+  const el = e.target, s = S.stops.find(x => x.id === el.closest('.stop').dataset.id), f = el.dataset.f;
+  if (!s || !f) return;
+  s[f] = el.value;
+  if (f === 'address') { s.lat = s.lng = null; s.geo = null; renderStops(); drawMap(); }
+  if (f !== 'name') { S.route = null; renderRoute(); }
+  save();
+});
+$('#stops').addEventListener('click', e => {
+  const b = e.target.closest('[data-act]'); if (!b) return;
+  const id = b.closest('.stop').dataset.id;
+  if (b.dataset.act === 'del') { S.stops = S.stops.filter(s => s.id !== id); S.route = null; save(); renderRoute(); drawMap(); }
+  else placing = placing === id ? null : id;
+  renderStops();
+});
+$('#startAddr').addEventListener('change', e => { S.start = { address: e.target.value, lat: null, lng: null }; S.route = null; save(); renderStops(); drawMap(); renderRoute(); });
+['#startTime', '#traffic', '#round'].forEach(s => $(s).addEventListener('change', () => { readForm(); S.route = null; renderRoute(); drawMap(); }));
+$('#startPin').onclick = () => { placing = placing === 'start' ? null : 'start'; renderStops(); };
+$('#startGps').onclick = () => navigator.geolocation.getCurrentPosition(
+  p => { S.start.address = S.start.address || 'Mi ubicación'; fillForm(); setPoint('start', p.coords.latitude, p.coords.longitude, 'manual'); renderStops(); drawMap(true); },
+  () => say('No se pudo obtener la ubicación (permiso o GPS).'), { enableHighAccuracy: true, timeout: 10000 });
+$('#add').onclick = () => { S.stops.push(newStop()); save(); renderStops(); $('#stops').lastElementChild.querySelector('input').focus(); };
+$('#go').onclick = () => optimize(false);
+$('#clear').onclick = () => { if (confirm('¿Borrar todas las paradas y la ruta?')) { S = blank(); save(); fillForm(); renderStops(); renderRoute(); drawMap(); } };
+document.querySelectorAll('.tabs button').forEach(b => b.onclick = () => showTab(b.dataset.tab));
+
+function parseBulk(txt) {
+  const hh = (h, m) => String(h).padStart(2, '0') + ':' + (m || '00');
+  return txt.split('\n').map(l => l.trim()).filter(Boolean).map(l => {
+    const p = l.split(/\s*[;\t]\s*/);
+    let [name, address, win, svc] = p;
+    if (p.length === 1) { address = name; name = ''; }
+    const m = /(\d{1,2})(?:[:.h](\d{2}))?\s*(?:-|–|a)\s*(\d{1,2})(?:[:.h](\d{2}))?/.exec(win || '');
+    return newStop({ name: name || '', address: address || '', from: m ? hh(m[1], m[2]) : '', to: m ? hh(m[3], m[4]) : '', service: svc && !isNaN(+svc) ? +svc : 5 });
+  });
+}
+$('#bulkAdd').onclick = () => { const n = parseBulk($('#bulk').value); if (!n.length) return; S.stops.push(...n); S.route = null; $('#bulk').value = ''; save(); renderStops(); renderRoute(); };
+$('#sample').onclick = () => {
+  if (!S.start.address) { S.start.address = 'Av. Agraciada 2500'; fillForm(); }
+  S.stops.push(...parseBulk(`Farmacia Centro; Av. 18 de Julio 1360; 09:00-11:00; 5
+Kiosco Pocitos; Av. Brasil 2600; 10:00-13:00; 5
+Oficina Carrasco; Av. Arocena 1680; 11:00-15:00; 10
+Almacén Prado; Av. Millán 3800; 08:30-10:00; 5
+Local Unión; Av. 8 de Octubre 3700; 12:00-16:00; 5
+Taller Cerro; Av. Carlos María Ramírez 1500; 14:00-17:00; 10`));
+  S.route = null; save(); renderStops(); renderRoute();
+};
+
+/* ---------- UI: ruta ---------- */
+function renderRoute() {
+  renderLog();
+  const box = $('#routeBox'), R = S.route;
+  if (!R) { box.innerHTML = '<p class="hint">Todavía no hay ruta. Cargá paradas y tocá “Calcular ruta óptima”.</p>'; return; }
+  const by = Object.fromEntries(S.stops.map(s => [s.id, s]));
+  const next = R.schedule.find(x => by[x.id] && !by[x.id].done);
+  const done = R.schedule.filter(x => by[x.id] && by[x.id].done).length;
+  box.innerHTML = `<div class="card sum">
+      <div><b>${fmt(R.end)}</b><span>Fin estimado</span></div>
+      <div><b>${dur(R.drive)}</b><span>Manejo${R.km ? ' · ' + R.km.toFixed(1) + ' km' : ''}</span></div>
+      <div><b style="color:var(--${R.nLate ? 'bad' : 'ok'})">${R.nLate}</b><span>Fuera de horario</span></div>
+    </div>
+    ${R.nLate ? '<p class="hint" style="color:var(--bad)">No existe orden que cumpla todos los horarios con esta hora de salida. Se minimizó el atraso.</p>' : ''}
+    ${R.approx ? '<p class="hint" style="color:var(--warn)">Sin servicio de ruteo: tiempos estimados en línea recta.</p>' : ''}
+    ${R.live ? '<p class="hint" style="color:var(--ok)">Horarios calculados con tránsito de Google.</p>' : ''}
+    ${R.warn ? '<p class="hint" style="color:var(--bad)">Sin tránsito de Google, se usó factor fijo. ' + esc(R.warn) + '</p>' : ''}
+    <div class="row" style="margin-bottom:10px">
+      <button class="btn sm" id="reopt">Recalcular desde mi ubicación</button>
+      <span class="hint fit">Salida ${fmt(R.t0)} · ${done}/${R.schedule.length} hechas${R.retimed != null ? ' · actualizado ' + fmt(R.retimed) : ''}</span>
+    </div>` +
+    R.schedule.map((x, i) => {
+      const s = by[x.id]; if (!s) return '';
+      const win = s.from || s.to ? `${s.from || '—'} a ${s.to || '—'}` : 'sin horario';
+      return `<div class="card leg ${s.done ? 'done' : ''} ${next && next.id === x.id ? 'next' : ''} ${sel === x.id ? 'sel' : ''}" data-id="${s.id}">
+        <div class="num">${i + 1}</div>
+        <div class="body">
+          <div class="nm">${esc(s.name || s.address)}</div>
+          <div class="ad">${esc(s.address)}</div>
+          <div class="chips">
+            <span class="chip">Llega ${fmt(x.arrive)}</span>
+            ${x.left != null ? `<span class="chip">Salió ${fmt(x.left)}${x.gps ? ' · desde tu ubicación' : ''}</span>` : ''}
+            ${s.done && s.doneAt ? `<span class="chip ok">Hecha ${hm(s.doneAt)}</span>` : ''}
+            <span class="chip">Horario ${esc(win)}</span>
+            ${x.wait > 0.5 ? `<span class="chip warn">Espera ${dur(x.wait)}</span>` : ''}
+            ${x.late ? `<span class="chip bad">Tarde ${dur(x.late)}</span>` : '<span class="chip ok">En hora</span>'}
+          </div>
+          ${x.nogps ? `<p class="hint" style="color:var(--warn);margin:0 0 6px">Llegada estimada desde la parada anterior, no desde tu ubicación. ${esc(x.nogps)}</p>` : ''}
+          <div class="acts">
+            <a class="btn sm pri" data-nav target="_blank" rel="noopener" href="https://waze.com/ul?ll=${s.lat}%2C${s.lng}&navigate=yes">Waze</a>
+            <a class="btn sm" data-nav target="_blank" rel="noopener" href="https://www.google.com/maps/dir/?api=1&destination=${s.lat},${s.lng}&travelmode=driving">Google Maps</a>
+            <label><input type="checkbox" data-done ${s.done ? 'checked' : ''}> Hecha</label>
+          </div>
+        </div></div>`;
+    }).join('') +
+    (R.round ? `<p class="hint">Vuelta al punto de partida: ${fmt(R.end)}</p>` : '');
+  $('#reopt').onclick = () => optimize(true);
+}
+// Tocar Waze / Google Maps = "salgo ahora hacia esta parada": recalcula llegadas desde la hora real,
+// para esa parada y las siguientes, sin cambiar el orden.
+const nowMin = () => { const d = new Date(); return d.getHours() * 60 + d.getMinutes() + d.getSeconds() / 60; };
+// Primero actualiza al instante con el tramo planificado; después lo corrige con el viaje real
+// desde la ubicación actual (tránsito de Google si hay key).
+async function retimeLive(id) {
+  const at = nowMin(), clicked = Date.now();
+  retime(id, null, at);
+  const s = S.stops.find(x => x.id === id);
+  if (!s || s.lat == null || !navigator.geolocation) return;
+  try {
+    const here = await getHere(s);
+    let min = null;
+    if (gkey()) { try { min = (await gRoute(here, s, Date.now(), gkey())).min; } catch (e) {} }
+    if (min == null) min = (await matrix([here, s])).M[0][1] * (+S.traffic || 1);
+    // respuesta tardía (la app quedó en segundo plano): la posición ya no es la de salida
+    if (Date.now() - clicked < 20000 && min < 300) retime(id, min, at);
+  } catch (e) {
+    // sin ubicación creíble queda el tramo planificado; se avisa en la tarjeta
+    const x = S.route && S.route.schedule.find(x => x.id === id);
+    if (x && x.left === at) { x.nogps = e && e.loc ? e.message : 'Sin acceso a la ubicación.'; save(); renderRoute(); }
+  }
+}
+function retime(id, leg, at) {
+  const R = S.route; if (!R) return;
+  const sc = R.schedule, k = sc.findIndex(x => x.id === id); if (k < 0) return;
+  const by = Object.fromEntries(S.stops.map(s => [s.id, s]));
+  const legs = sc.map(x => x.leg), back = R.back || 0;
+  let t = at ?? nowMin();
+  sc[k].left = R.retimed = t;
+  sc[k].gps = leg != null; delete sc[k].nogps;
+  if (leg != null) legs[k] = leg;
+  for (let i = k; i < sc.length; i++) {
+    const x = sc[i], s = by[x.id] || {};
+    t += legs[i]; x.arrive = t;
+    const a = toMin(s.from) ?? 0, b = toMin(s.to) ?? 1e9;
+    if (t < a) t = a;
+    x.begin = t; x.wait = t - x.arrive; x.late = t - b > 0.5 ? t - b : 0;
+    t += Math.max(0, +s.service || 0); x.depart = t;
+  }
+  R.end = t + back; R.nLate = sc.filter(x => x.late > 0).length;
+  save(); renderRoute(); drawMap();
+}
+$('#routeBox').addEventListener('click', e => {
+  const nav = e.target.closest('a[data-nav]');
+  if (nav) { const id = nav.closest('.leg').dataset.id; setTimeout(() => retimeLive(id), 0); return; } // después de abrir el link
+  if (e.target.closest('a,button,label,input')) return;
+  const leg = e.target.closest('.leg');
+  if (leg) select(leg.dataset.id);
+});
+$('#routeBox').addEventListener('change', e => {
+  if (!e.target.matches('[data-done]')) return;
+  const s = S.stops.find(x => x.id === e.target.closest('.leg').dataset.id);
+  if (s) { s.done = e.target.checked; logDone(s); save(); renderRoute(); drawMap(); }
+});
+
+/* ---------- registro de entregas (queda en el dispositivo, sobrevive a "Borrar todo") ---------- */
+let LOG = [], logOpen = false;
+try { LOG = JSON.parse(localStorage.getItem('reparto-log')) || []; } catch (e) {}
+const hm = iso => new Date(iso).toLocaleTimeString('es', { hour: '2-digit', minute: '2-digit', hour12: false });
+const dayKey = d => { d = new Date(d); return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0'); };
+function logDone(s) {
+  LOG = LOG.filter(x => x.id !== s.id); // desmarcar borra el registro
+  if (s.done) {
+    const x = S.route && S.route.schedule.find(x => x.id === s.id);
+    s.doneAt = new Date().toISOString();
+    LOG.push({ id: s.id, at: s.doneAt, name: s.name, address: s.address, from: s.from, to: s.to, eta: x ? fmt(x.arrive) : '' });
+    LOG = LOG.slice(-2000);
+  } else delete s.doneAt;
+  try { localStorage.setItem('reparto-log', JSON.stringify(LOG)); } catch (e) {}
+}
+const outOfWindow = x => !!(x.to && hm(x.at) > x.to);
+function renderLog() {
+  const box = $('#logBox');
+  if (!LOG.length) { box.innerHTML = ''; return; }
+  const today = LOG.filter(x => dayKey(x.at) === dayKey(new Date()));
+  box.innerHTML = `<details class="card" ${logOpen ? 'open' : ''}>
+    <summary>Registro de entregas (hoy: ${today.length})</summary>
+    ${today.map(x => `<div class="logrow"><b>${hm(x.at)}</b>${esc(x.name || x.address)}${outOfWindow(x) ? ' <span class="chip bad">fuera de horario</span>' : ''}</div>`).join('') || '<p class="hint">Sin entregas hoy.</p>'}
+    <div class="row" style="margin-top:8px">
+      <button class="btn sm" id="logShare">Compartir resumen de hoy</button>
+      <button class="btn sm" id="logCsv">Descargar historial</button>
+    </div></details>`;
+  box.firstElementChild.ontoggle = e => { logOpen = e.target.open; };
+  $('#logShare').onclick = async e => {
+    const text = 'Entregas ' + new Date().toLocaleDateString('es') + ' (' + today.length + ')\n' +
+      today.map(x => hm(x.at) + ' ' + (x.name || x.address) + (x.name && x.address ? ' (' + x.address + ')' : '') + (outOfWindow(x) ? ' [fuera de horario]' : '')).join('\n');
+    try {
+      if (navigator.share) await navigator.share({ text });
+      else { await navigator.clipboard.writeText(text); e.target.textContent = 'Copiado ✓'; }
+    } catch (err) {}
+  };
+  $('#logCsv').onclick = () => {
+    const q = v => '"' + String(v ?? '').replace(/"/g, '""') + '"';
+    const rows = [['Fecha', 'Hora', 'Nombre', 'Dirección', 'Horario desde', 'Horario hasta', 'Llegada planificada', 'Fuera de horario'],
+      ...LOG.map(x => [dayKey(x.at), hm(x.at), x.name, x.address, x.from, x.to, x.eta, outOfWindow(x) ? 'sí' : 'no'])];
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(new Blob(['﻿' + rows.map(r => r.map(q).join(';')).join('\r\n')], { type: 'text/csv;charset=utf-8' }));
+    a.download = 'entregas-' + dayKey(new Date()) + '.csv';
+    a.click(); URL.revokeObjectURL(a.href);
+  };
+}
+
+new ResizeObserver(() => map.invalidateSize()).observe($('#map'));
+// rutas guardadas por una versión anterior, sin duración de tramos: se reconstruye si nadie tocó los horarios; si no, se descarta
+if (S.route && S.route.schedule.some(x => x.leg == null)) {
+  if (S.route.retimed != null) S.route = null;
+  else {
+    const sc = S.route.schedule;
+    S.route.back = sc.length ? S.route.end - sc[sc.length - 1].depart : 0;
+    sc.forEach((x, i) => { x.leg = x.arrive - (i ? sc[i - 1].depart : S.route.t0); });
+  }
+  save();
+}
+fillForm(); renderStops(); renderRoute(); drawMap(true);
+setTimeout(() => drawMap(true), 300);
+</script>
+</body>
+</html>
